@@ -1,0 +1,74 @@
+{
+    "name": "newsong/sermon-formatter",
+    "description": "Sermon notes formatter for Statamic - upload DOCX/RTF files and auto-format via Claude AI into Bard field content",
+    "type": "statamic-addon",
+    "license": "MIT",
+    "keywords": [
+        "statamic",
+        "addon",
+        "sermon",
+        "formatter",
+        "claude",
+        "ai",
+        "bard"
+    ],
+    "homepage": "https://github.com/westwalltech/sermonformatter",
+    "authors": [
+        {
+            "name": "New Song Church",
+            "email": "tech@newsongpeople.com",
+            "homepage": "https://newsongchurch.org"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/westwalltech/sermonformatter/issues",
+        "source": "https://github.com/westwalltech/sermonformatter"
+    },
+    "require": {
+        "php": "^8.4",
+        "statamic/cms": "^6.0",
+        "phpoffice/phpword": "^1.3",
+        "league/commonmark": "^2.6"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "NewSong\\SermonFormatter\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "NewSong\\SermonFormatter\\Tests\\": "tests"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pixelfear/composer-dist-plugin": true,
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Sermon Formatter",
+            "description": "Upload sermon notes and auto-format them into Bard field content using AI"
+        },
+        "laravel": {
+            "providers": [
+                "NewSong\\SermonFormatter\\ServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "test:coverage": "pest --coverage",
+        "lint": "pint --test",
+        "lint:fix": "pint"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

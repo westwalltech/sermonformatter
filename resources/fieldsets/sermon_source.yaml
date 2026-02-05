@@ -1,0 +1,8 @@
+title: Sermon Source
+fields:
+  -
+    handle: sermon_source
+    field:
+      type: sermon_source
+      display: 'Sermon Source'
+      instructions: 'Upload a .docx or .rtf file to auto-format sermon notes.'

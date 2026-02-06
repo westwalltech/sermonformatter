@@ -52,7 +52,11 @@ class SermonSource extends Fieldtype
 
             if ($entry && method_exists($entry, 'id') && $entry->id()) {
                 $entryId = $entry->id();
-                $collection = method_exists($entry, 'collectionHandle') ? $entry->collectionHandle() : null;
+                if (method_exists($entry, 'collectionHandle')) {
+                    $collection = $entry->collectionHandle();
+                } elseif (method_exists($entry, 'collection')) {
+                    $collection = $entry->collection()?->handle();
+                }
             }
         } catch (\Exception $e) {
             // Entry not ready

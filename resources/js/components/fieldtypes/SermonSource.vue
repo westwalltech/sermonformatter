@@ -295,7 +295,12 @@ export default {
                     this.error = response.data.message || 'Upload failed.';
                 }
             } catch (err) {
-                this.error = err.response?.data?.message || 'Upload failed. Please try again.';
+                const data = err.response?.data;
+                if (data?.errors) {
+                    this.error = Object.values(data.errors).flat().join(' ');
+                } else {
+                    this.error = data?.message || 'Upload failed. Please try again.';
+                }
             } finally {
                 this.uploading = false;
                 this.uploadProgress = 0;

@@ -105,7 +105,7 @@ class SermonFormatterController extends Controller
                 'max:'.(config('sermon-formatter.processing.max_file_size', 10) * 1024),
             ],
             'entry_id' => 'required|string',
-            'collection' => 'required|string',
+            'collection' => 'nullable|string',
         ]);
 
         $file = $request->file('file');
@@ -128,6 +128,12 @@ class SermonFormatterController extends Controller
             ], 404);
         }
 
+        // Derive collection from entry if not provided
+        $collection = $request->input('collection');
+        if (empty($collection) && method_exists($entry, 'collectionHandle')) {
+            $collection = $entry->collectionHandle();
+        }
+
         // Store file in temp location
         $uploadDir = storage_path('sermon-formatter/uploads');
         if (! File::isDirectory($uploadDir)) {
@@ -143,7 +149,7 @@ class SermonFormatterController extends Controller
         // Create processing log
         $log = ProcessingLog::create([
             'entry_id' => $request->input('entry_id'),
-            'collection' => $request->input('collection'),
+            'collection' => $collection,
             'file_name' => $fileName,
             'status' => 'pending',
         ]);
@@ -172,7 +178,7 @@ class SermonFormatterController extends Controller
         // Job will update status to completed/failed when done
         ProcessSermonDocument::dispatch(
             $request->input('entry_id'),
-            $request->input('collection'),
+            $collection,
             $filePath,
             $fileName,
             $log->id,

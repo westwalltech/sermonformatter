@@ -104,6 +104,7 @@ class SermonFormatterController extends Controller
             'file' => [
                 'required',
                 'file',
+                'mimes:docx,rtf',
                 'max:'.(config('sermon-formatter.processing.max_file_size', 10) * 1024),
             ],
             'entry_id' => 'required|string',
@@ -111,15 +112,6 @@ class SermonFormatterController extends Controller
         ]);
 
         $file = $request->file('file');
-        $extension = strtolower($file->getClientOriginalExtension());
-
-        $allowedExtensions = config('sermon-formatter.processing.allowed_extensions', ['docx', 'rtf']);
-        if (! in_array($extension, $allowedExtensions)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid file type. Allowed: '.implode(', ', $allowedExtensions),
-            ], 422);
-        }
 
         // Verify entry exists
         $entry = Entry::find($request->input('entry_id'));
@@ -128,6 +120,18 @@ class SermonFormatterController extends Controller
                 'success' => false,
                 'message' => 'Entry not found.',
             ], 404);
+        }
+
+        // Check for already-pending or processing jobs for this entry
+        $existingJob = ProcessingLog::where('entry_id', $request->input('entry_id'))
+            ->whereIn('status', ['pending', 'processing'])
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This entry already has a sermon being processed. Please wait for it to complete or check the processing logs.',
+            ], 409);
         }
 
         // Derive collection from entry if not provided

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Fieldtypes;
 
 use Statamic\Fields\Fieldtype;

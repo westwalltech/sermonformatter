@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Jobs;
 
 use Illuminate\Bus\Queueable;
@@ -18,7 +20,10 @@ use Statamic\Facades\Entry;
 
 class ProcessSermonDocument implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
     public int $tries;
 

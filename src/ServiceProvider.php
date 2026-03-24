@@ -1,11 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter;
 
 use NewSong\SermonFormatter\Console\Commands\BulkProcessCommand;
 use NewSong\SermonFormatter\Console\Commands\TestClaudeCommand;
 use NewSong\SermonFormatter\Fieldtypes\SermonSource;
-use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;

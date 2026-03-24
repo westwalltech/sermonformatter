@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Console\Commands;
 
 use Illuminate\Console\Command;
+use NewSong\SermonFormatter\Jobs\ProcessSermonDocument;
 use NewSong\SermonFormatter\Models\ProcessingLog;
 use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\Entry;
@@ -92,7 +95,7 @@ class BulkProcessCommand extends Command
 
             // Re-dispatch the job
             $log->update(['status' => 'pending', 'error' => null]);
-            \NewSong\SermonFormatter\Jobs\ProcessSermonDocument::dispatch(
+            ProcessSermonDocument::dispatch(
                 $log->entry_id,
                 $log->collection,
                 $filePath,

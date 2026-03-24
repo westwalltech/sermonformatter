@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Tests;
 
 use NewSong\SermonFormatter\ServiceProvider;

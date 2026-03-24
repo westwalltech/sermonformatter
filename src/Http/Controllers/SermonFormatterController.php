@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
@@ -10,7 +12,6 @@ use Inertia\Inertia;
 use NewSong\SermonFormatter\Jobs\ProcessSermonDocument;
 use NewSong\SermonFormatter\Models\ProcessingLog;
 use NewSong\SermonFormatter\Services\ClaudeClient;
-use NewSong\SermonFormatter\Services\DocumentParser;
 use NewSong\SermonFormatter\Services\FormattingSpecs;
 use NewSong\SermonFormatter\Services\MarkdownToBard;
 use NewSong\SermonFormatter\Support\Logger;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Support;
 
 use Illuminate\Support\Facades\Log;

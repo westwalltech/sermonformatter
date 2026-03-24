@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Services;
 
 use League\CommonMark\CommonMarkConverter;

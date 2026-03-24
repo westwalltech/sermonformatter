@@ -77,7 +77,8 @@
     </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, getCurrentInstance } from 'vue';
 import { Head } from '@statamic/cms/inertia';
 import {
     Alert,
@@ -89,122 +90,102 @@ import {
     Textarea,
 } from '@statamic/cms/ui';
 
-export default {
-    components: {
-        Head,
-        Alert,
-        Button,
-        Card,
-        Header,
-        Label,
-        Panel,
-        Textarea,
-    },
+const instance = getCurrentInstance();
+const $axios = instance?.appContext?.config?.globalProperties?.$axios;
+const $toast = instance?.appContext?.config?.globalProperties?.$toast;
 
-    data() {
-        return {
+const content = ref('');
+const originalContent = ref('');
+const isDefault = ref(true);
+const saving = ref(false);
+const resetting = ref(false);
+const testInput = ref('');
+const testResult = ref(null);
+const testError = ref(null);
+const testing = ref(false);
+
+const hasChanges = computed(() => content.value !== originalContent.value);
+
+async function loadSpecs() {
+    try {
+        const response = await $axios.get('/cp/sermon-formatter/specs/content');
+        content.value = response.data.content;
+        originalContent.value = response.data.content;
+        isDefault.value = response.data.is_default;
+    } catch (error) {
+        console.error('Failed to load specs:', error);
+        $toast.error('Failed to load formatting specs.');
+    }
+}
+
+async function saveSpecs() {
+    saving.value = true;
+    try {
+        const response = await $axios.post('/cp/sermon-formatter/specs', {
+            content: content.value,
+        });
+
+        if (response.data.success) {
+            originalContent.value = content.value;
+            isDefault.value = false;
+            $toast.success(response.data.message);
+        }
+    } catch (error) {
+        $toast.error('Failed to save specs.');
+    } finally {
+        saving.value = false;
+    }
+}
+
+async function resetSpecs() {
+    resetting.value = true;
+    try {
+        const response = await $axios.post('/cp/sermon-formatter/specs', {
             content: '',
-            originalContent: '',
-            isDefault: true,
-            saving: false,
-            resetting: false,
-            testInput: '',
-            testResult: null,
-            testError: null,
-            testing: false,
-        };
-    },
+            reset: true,
+        });
 
-    computed: {
-        hasChanges() {
-            return this.content !== this.originalContent;
-        },
-    },
+        if (response.data.success) {
+            content.value = response.data.content;
+            originalContent.value = response.data.content;
+            isDefault.value = true;
+            $toast.success(response.data.message);
+        }
+    } catch (error) {
+        $toast.error('Failed to reset specs.');
+    } finally {
+        resetting.value = false;
+    }
+}
 
-    mounted() {
-        this.loadSpecs();
-    },
+async function testFormat() {
+    testing.value = true;
+    testResult.value = null;
+    testError.value = null;
 
-    methods: {
-        async loadSpecs() {
-            try {
-                const response = await this.$axios.get('/cp/sermon-formatter/specs/content');
-                this.content = response.data.content;
-                this.originalContent = response.data.content;
-                this.isDefault = response.data.is_default;
-            } catch (error) {
-                console.error('Failed to load specs:', error);
-                this.$toast.error('Failed to load formatting specs.');
-            }
-        },
+    try {
+        const response = await $axios.post('/cp/sermon-formatter/test', {
+            text: testInput.value,
+        });
 
-        async saveSpecs() {
-            this.saving = true;
-            try {
-                const response = await this.$axios.post('/cp/sermon-formatter/specs', {
-                    content: this.content,
-                });
+        if (response.data.success) {
+            testResult.value = response.data;
+        } else {
+            testError.value = response.data.message;
+        }
+    } catch (error) {
+        console.error('Test format error:', error.response?.status, error.response?.data);
+        const data = error.response?.data;
+        if (data?.errors) {
+            testError.value = Object.values(data.errors).flat().join(', ');
+        } else {
+            testError.value = data?.message || 'Test failed.';
+        }
+    } finally {
+        testing.value = false;
+    }
+}
 
-                if (response.data.success) {
-                    this.originalContent = this.content;
-                    this.isDefault = false;
-                    this.$toast.success(response.data.message);
-                }
-            } catch (error) {
-                this.$toast.error('Failed to save specs.');
-            } finally {
-                this.saving = false;
-            }
-        },
-
-        async resetSpecs() {
-            this.resetting = true;
-            try {
-                const response = await this.$axios.post('/cp/sermon-formatter/specs', {
-                    content: '',
-                    reset: true,
-                });
-
-                if (response.data.success) {
-                    this.content = response.data.content;
-                    this.originalContent = response.data.content;
-                    this.isDefault = true;
-                    this.$toast.success(response.data.message);
-                }
-            } catch (error) {
-                this.$toast.error('Failed to reset specs.');
-            } finally {
-                this.resetting = false;
-            }
-        },
-
-        async testFormat() {
-            this.testing = true;
-            this.testResult = null;
-            this.testError = null;
-
-            try {
-                const response = await this.$axios.post('/cp/sermon-formatter/test', {
-                    text: this.testInput,
-                });
-
-                if (response.data.success) {
-                    this.testResult = response.data;
-                } else {
-                    this.testError = response.data.message;
-                }
-            } catch (error) {
-                console.error('Test format error:', error.response?.status, error.response?.data);
-                const data = error.response?.data;
-                if (data?.errors) {
-                    this.testError = Object.values(data.errors).flat().join(', ');
-                } else {
-                    this.testError = data?.message || 'Test failed.';
-                }
-            } finally {
-                this.testing = false;
-            }
-        },
-    },
-};
+// Load on mount
+loadSpecs();
 </script>

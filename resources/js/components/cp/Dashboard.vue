@@ -69,14 +69,11 @@
                     <div class="p-4 space-y-3">
                         <div class="flex justify-between items-center">
                             <Description>Avg Processing Time</Description>
-                            <Badge :text="`${stats.avg_processing_time || 0}s`" color="blue" />
+                            <Badge :text="formatAvgTime(stats.avg_processing_time)" color="blue" />
                         </div>
                         <div class="flex justify-between items-center">
                             <Description>Success Rate</Description>
-                            <Badge
-                                :text="successRate"
-                                :color="successRateColor"
-                            />
+                            <Badge :text="successRate" :color="successRateColor" />
                         </div>
                         <div class="flex justify-between items-center">
                             <Description>Total Tokens Used</Description>
@@ -109,8 +106,10 @@
         <!-- Recent Activity -->
         <Panel heading="Recent Activity" subheading="Last 10 processing jobs">
             <Card>
-                <div v-if="loading" class="flex items-center justify-center py-8">
-                    <Icon name="loading" class="animate-spin h-6 w-6 text-gray-400" />
+                <div v-if="loading" class="p-4 space-y-3">
+                    <Skeleton class="h-8 w-full" />
+                    <Skeleton class="h-8 w-full" />
+                    <Skeleton class="h-8 w-3/4" />
                 </div>
 
                 <div v-else-if="stats.recent_logs?.length" class="p-4">
@@ -119,54 +118,63 @@
                             <TableColumn>Status</TableColumn>
                             <TableColumn>File</TableColumn>
                             <TableColumn>Collection</TableColumn>
-                            <TableColumn>Tokens</TableColumn>
-                            <TableColumn>Time</TableColumn>
+                            <TableColumn class="text-right">Tokens</TableColumn>
+                            <TableColumn class="text-right">Time</TableColumn>
                             <TableColumn>When</TableColumn>
                         </TableColumns>
                         <TableRows>
                             <TableRow v-for="log in stats.recent_logs" :key="log.id">
                                 <TableCell>
-                                    <div
-                                        class="w-8 h-8 rounded-lg flex items-center justify-center"
-                                        :style="getStatusStyle(log.status)"
-                                    >
-                                        <Icon :name="getStatusIcon(log.status)" class="w-4 h-4" :style="{ color: getStatusColor(log.status) }" />
-                                    </div>
+                                    <Badge
+                                        :text="log.status"
+                                        :color="getStatusBadgeColor(log.status)"
+                                        size="sm"
+                                    />
                                 </TableCell>
                                 <TableCell>
                                     <span class="truncate max-w-xs block">{{ log.file_name }}</span>
                                 </TableCell>
                                 <TableCell>{{ log.collection }}</TableCell>
-                                <TableCell>{{ log.tokens ? formatTokens(log.tokens) : '—' }}</TableCell>
-                                <TableCell>{{ log.processing_time || '—' }}</TableCell>
+                                <TableCell class="text-right">
+                                    <span class="text-xs tabular-nums">{{ log.tokens ? formatTokens(log.tokens) : '--' }}</span>
+                                </TableCell>
+                                <TableCell class="text-right">
+                                    <span class="text-xs tabular-nums">{{ formatTime(log.processing_time) }}</span>
+                                </TableCell>
                                 <TableCell>
-                                    <span class="text-gray-500">{{ log.created_at }}</span>
+                                    <span class="text-gray-500 text-xs">{{ log.created_at }}</span>
                                 </TableCell>
                             </TableRow>
                         </TableRows>
                     </Table>
                 </div>
 
-                <div v-else class="flex flex-col items-center justify-center py-8 text-center">
-                    <Icon name="file-content-list" class="w-10 h-10 text-gray-300 dark:text-gray-600" />
-                    <Description class="mt-2">No processing activity yet</Description>
-                </div>
+                <ul v-else>
+                    <EmptyStateItem
+                        icon="file-content-list"
+                        heading="No processing activity yet"
+                        description="Recent processing jobs will appear here."
+                    />
+                </ul>
             </Card>
         </Panel>
     </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue';
 import { Head } from '@statamic/cms/inertia';
 import {
+    Badge,
+    Button,
+    Card,
+    Description,
+    EmptyStateItem,
     Header,
     Heading,
-    Description,
-    Card,
-    Panel,
-    Button,
-    Badge,
     Icon,
+    Panel,
+    Skeleton,
     Table,
     TableColumns,
     TableColumn,
@@ -175,107 +183,71 @@ import {
     TableCell,
 } from '@statamic/cms/ui';
 
-export default {
-    components: {
-        Head,
-        Header,
-        Heading,
-        Description,
-        Card,
-        Panel,
-        Button,
-        Badge,
-        Icon,
-        Table,
-        TableColumns,
-        TableColumn,
-        TableRows,
-        TableRow,
-        TableCell,
-    },
+const instance = getCurrentInstance();
+const $axios = instance?.appContext?.config?.globalProperties?.$axios;
 
-    data() {
-        return {
-            stats: {},
-            loading: true,
-        };
-    },
+const stats = ref({});
+const loading = ref(true);
+let refreshInterval = null;
 
-    computed: {
-        successRate() {
-            const total = (this.stats.total_processed || 0) + (this.stats.total_failed || 0);
-            if (total === 0) return '—';
-            const rate = Math.round((this.stats.total_processed / total) * 100);
-            return `${rate}%`;
-        },
+const successRate = computed(() => {
+    const total = (stats.value.total_processed || 0) + (stats.value.total_failed || 0);
+    if (total === 0) return '--';
+    const rate = Math.round((stats.value.total_processed / total) * 100);
+    return `${rate}%`;
+});
 
-        successRateColor() {
-            const total = (this.stats.total_processed || 0) + (this.stats.total_failed || 0);
-            if (total === 0) return 'gray';
-            const rate = (this.stats.total_processed / total) * 100;
-            if (rate >= 90) return 'green';
-            if (rate >= 70) return 'amber';
-            return 'red';
-        },
-    },
+const successRateColor = computed(() => {
+    const total = (stats.value.total_processed || 0) + (stats.value.total_failed || 0);
+    if (total === 0) return 'gray';
+    const rate = (stats.value.total_processed / total) * 100;
+    if (rate >= 90) return 'green';
+    if (rate >= 70) return 'amber';
+    return 'red';
+});
 
-    mounted() {
-        this.loadStats();
-        this.refreshInterval = setInterval(() => this.loadStats(), 30000);
-    },
+async function loadStats() {
+    loading.value = true;
+    try {
+        const response = await $axios.get('/cp/sermon-formatter/stats');
+        stats.value = response.data;
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+    } finally {
+        loading.value = false;
+    }
+}
 
-    beforeUnmount() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-    },
+function formatTokens(count) {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return String(count);
+}
 
-    methods: {
-        async loadStats() {
-            this.loading = true;
-            try {
-                const response = await this.$axios.get('/cp/sermon-formatter/stats');
-                this.stats = response.data;
-            } catch (error) {
-                console.error('Failed to load stats:', error);
-            } finally {
-                this.loading = false;
-            }
-        },
+function formatTime(value) {
+    if (!value) return '--';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num)) return '--';
+    return `${num.toFixed(1)}s`;
+}
 
-        formatTokens(count) {
-            if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
-            if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
-            return String(count);
-        },
+function formatAvgTime(value) {
+    if (!value) return '0s';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num)) return '0s';
+    return `${num.toFixed(1)}s`;
+}
 
-        getStatusIcon(status) {
-            return {
-                completed: 'checkmark',
-                failed: 'alert-warning-exclamation-mark',
-                processing: 'loading',
-                pending: 'time-clock',
-            }[status] || 'info';
-        },
+function getStatusBadgeColor(status) {
+    return { completed: 'green', failed: 'red', processing: 'blue', pending: 'amber' }[status] || 'gray';
+}
 
-        getStatusColor(status) {
-            return {
-                completed: '#22c55e',
-                failed: '#ef4444',
-                processing: '#3b82f6',
-                pending: '#eab308',
-            }[status] || '#6b7280';
-        },
+onMounted(() => {
+    loadStats();
+    refreshInterval = setInterval(() => loadStats(), 30000);
+});
 
-        getStatusStyle(status) {
-            const colors = {
-                completed: 'rgba(34, 197, 94, 0.15)',
-                failed: 'rgba(239, 68, 68, 0.15)',
-                processing: 'rgba(59, 130, 246, 0.15)',
-                pending: 'rgba(234, 179, 8, 0.15)',
-            };
-            return { backgroundColor: colors[status] || 'rgba(107, 114, 128, 0.15)' };
-        },
-    },
-};
+onBeforeUnmount(() => {
+    if (refreshInterval) clearInterval(refreshInterval);
+});
 </script>

@@ -14,6 +14,7 @@ use NewSong\SermonFormatter\Models\ProcessingLog;
 use NewSong\SermonFormatter\Services\ClaudeClient;
 use NewSong\SermonFormatter\Services\FormattingSpecs;
 use NewSong\SermonFormatter\Services\MarkdownToBard;
+use NewSong\SermonFormatter\Support\FileLocator;
 use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\Entry;
 
@@ -231,9 +232,6 @@ class SermonFormatterController extends Controller
             ], 404);
         }
 
-        // Check if the file still exists
-        $filePath = storage_path('sermon-formatter/uploads/'.time().'_'.$log->file_name);
-
         // If original file is gone, we need a re-upload
         $entry = Entry::find($entryId);
         if (! $entry) {
@@ -252,7 +250,7 @@ class SermonFormatterController extends Controller
         ]);
 
         // We need the original file - check if it exists
-        $existingFile = $this->findUploadedFile($log->file_name);
+        $existingFile = FileLocator::findUploadedFile($log->file_name);
         if (! $existingFile) {
             $newLog->markFailed('Original file not found. Please re-upload the document.');
 
@@ -351,7 +349,7 @@ class SermonFormatterController extends Controller
                 continue;
             }
 
-            $file = $this->findUploadedFile($log->file_name);
+            $file = FileLocator::findUploadedFile($log->file_name);
             if (! $file) {
                 $skipped++;
 
@@ -417,27 +415,5 @@ class SermonFormatterController extends Controller
             'success' => true,
             'message' => 'Formatting specs saved.',
         ]);
-    }
-
-    protected function findUploadedFile(string $fileName): ?string
-    {
-        $uploadDir = storage_path('sermon-formatter/uploads');
-        if (! File::isDirectory($uploadDir)) {
-            return null;
-        }
-
-        // Look for the file (may have timestamp prefix)
-        $files = File::glob($uploadDir.'/*_'.$fileName);
-        if (! empty($files)) {
-            return end($files); // Return the most recent one
-        }
-
-        // Also check for exact match
-        $exactPath = $uploadDir.'/'.$fileName;
-        if (File::exists($exactPath)) {
-            return $exactPath;
-        }
-
-        return null;
     }
 }

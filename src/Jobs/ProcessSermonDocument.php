@@ -86,6 +86,18 @@ class ProcessSermonDocument implements ShouldQueue
                 'characters' => strlen($rawText),
             ]);
 
+            // Guard against oversized documents (e.g. slides exports)
+            $maxCharacters = config('sermon-formatter.processing.max_characters', 50000);
+            $charCount = strlen($rawText);
+            if ($charCount > $maxCharacters) {
+                $estimatedTokens = (int) round($charCount / 4);
+
+                throw new \RuntimeException(
+                    "Document too large: {$charCount} characters (~{$estimatedTokens} tokens). "
+                    ."Max allowed: {$maxCharacters}. This may be a slides export rather than sermon notes."
+                );
+            }
+
             // Step 2: Get formatting specs and send to Claude
             $systemPrompt = $specs->buildSystemPrompt();
             $response = $claude->send($systemPrompt, $rawText);

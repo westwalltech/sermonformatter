@@ -31,6 +31,9 @@ return [
         // Maximum file size in MB
         'max_file_size' => 10,
 
+        // Maximum characters after parsing (rejects slides exports that would burn API credits)
+        'max_characters' => (int) env('SERMON_FORMATTER_MAX_CHARACTERS', 50000),
+
         // Allowed file extensions
         'allowed_extensions' => ['docx', 'rtf'],
     ],

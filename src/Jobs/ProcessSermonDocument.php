@@ -8,6 +8,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\File;
 use NewSong\SermonFormatter\Models\ProcessingLog;
@@ -41,6 +42,15 @@ class ProcessSermonDocument implements ShouldQueue
         $this->retryAfter = config('sermon-formatter.queue.retry_after', 120);
         $this->onQueue(config('sermon-formatter.queue.name', 'default'));
         $this->targetField = $targetField ?? config('sermon-formatter.processing.target_field', 'notes');
+    }
+
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('sermon-formatter-claude-api'))
+                ->releaseAfter(config('sermon-formatter.rate_limit.cooldown_seconds', 5))
+                ->expireAfter($this->retryAfter),
+        ];
     }
 
     public function handle(

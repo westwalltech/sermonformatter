@@ -48,6 +48,25 @@ class SermonFormatterController extends Controller
         $avgProcessingTime = ProcessingLog::completed()
             ->avg('processing_time') ?? 0;
 
+        // Estimate cost based on model pricing (per million tokens, in USD)
+        $modelPricing = [
+            'claude-sonnet-4-5-20250929' => ['input' => 3.0, 'output' => 15.0],
+            'claude-sonnet-4-20250514' => ['input' => 3.0, 'output' => 15.0],
+            'claude-haiku-4-5-20251001' => ['input' => 0.80, 'output' => 4.0],
+        ];
+
+        $costData = ProcessingLog::completed()
+            ->selectRaw('model, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output')
+            ->groupBy('model')
+            ->get();
+
+        $estimatedCost = 0.0;
+        foreach ($costData as $row) {
+            $pricing = $modelPricing[$row->model] ?? $modelPricing['claude-sonnet-4-5-20250929'];
+            $estimatedCost += ($row->total_input / 1_000_000) * $pricing['input'];
+            $estimatedCost += ($row->total_output / 1_000_000) * $pricing['output'];
+        }
+
         $recentLogs = ProcessingLog::orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
@@ -69,6 +88,7 @@ class SermonFormatterController extends Controller
             'total_pending' => $totalPending,
             'total_tokens' => $totalTokens,
             'avg_processing_time' => round($avgProcessingTime, 1),
+            'estimated_cost_usd' => round($estimatedCost, 4),
             'recent_logs' => $recentLogs,
         ]);
     }

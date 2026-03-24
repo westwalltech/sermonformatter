@@ -26,7 +26,7 @@ class TestClaudeCommand extends Command
             return self::FAILURE;
         }
 
-        $this->info('API Key: '.substr($apiKey, 0, 12).'...');
+        $this->info('API Key: '.substr($apiKey, 0, 6).'...');
         $this->info('Model: '.config('sermon-formatter.anthropic.model'));
         $this->info('Max Tokens: '.config('sermon-formatter.anthropic.max_tokens'));
         $this->newLine();

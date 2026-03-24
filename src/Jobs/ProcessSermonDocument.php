@@ -158,8 +158,6 @@ class ProcessSermonDocument implements ShouldQueue
             } catch (\Exception $ignore) {
             }
 
-            $this->cleanupFile();
-
             Logger::error('Sermon processing failed', [
                 'entry_id' => $this->entryId,
                 'error' => $e->getMessage(),

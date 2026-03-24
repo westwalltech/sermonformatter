@@ -159,3 +159,31 @@ it('saves content normally when stop_reason is end_turn', function () {
         ->and($this->log->status)->toBe('completed')
         ->and($this->log->error)->toBeNull();
 });
+
+it('preserves uploaded file when job fails', function () {
+    $fakeEntry = makeFakeEntry();
+    bindFakeEntryRepository($fakeEntry);
+
+    $parser = Mockery::mock(DocumentParser::class);
+    $parser->shouldReceive('parse')->andThrow(new RuntimeException('Parse error'));
+
+    $specs = Mockery::mock(FormattingSpecs::class);
+    $claude = Mockery::mock(ClaudeClient::class);
+    $converter = Mockery::mock(MarkdownToBard::class);
+
+    $job = new ProcessSermonDocument(
+        entryId: $this->entryId,
+        collection: 'messages',
+        filePath: $this->filePath,
+        fileName: 'test-sermon.docx',
+        logId: $this->log->id,
+    );
+
+    try {
+        $job->handle($parser, $claude, $specs, $converter);
+    } catch (RuntimeException) {
+        // expected
+    }
+
+    expect(File::exists($this->filePath))->toBeTrue();
+});

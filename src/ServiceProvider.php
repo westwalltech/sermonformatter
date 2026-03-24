@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter;
 
+use Illuminate\Console\Scheduling\Schedule;
 use NewSong\SermonFormatter\Console\Commands\BulkProcessCommand;
+use NewSong\SermonFormatter\Console\Commands\RecoverStaleJobsCommand;
 use NewSong\SermonFormatter\Console\Commands\TestClaudeCommand;
 use NewSong\SermonFormatter\Fieldtypes\SermonSource;
-use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
@@ -19,6 +22,7 @@ class ServiceProvider extends AddonServiceProvider
     protected $commands = [
         TestClaudeCommand::class,
         BulkProcessCommand::class,
+        RecoverStaleJobsCommand::class,
     ];
 
     protected $routes = [
@@ -51,6 +55,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerLoggingChannel();
         $this->publishAssets();
         $this->loadMigrations();
+        $this->registerSchedule();
     }
 
     protected function registerLoggingChannel(): void
@@ -119,5 +124,13 @@ class ServiceProvider extends AddonServiceProvider
     protected function loadMigrations(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
+
+    protected function registerSchedule(): void
+    {
+        $this->app->booted(function () {
+            $schedule = $this->app->make(Schedule::class);
+            $schedule->command('sermon-formatter:recover-stale')->everyFiveMinutes();
+        });
     }
 }

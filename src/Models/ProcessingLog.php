@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +18,7 @@ class ProcessingLog extends Model
         'input_tokens',
         'output_tokens',
         'model',
+        'stop_reason',
         'processing_time',
         'error',
     ];
@@ -54,7 +57,7 @@ class ProcessingLog extends Model
         $this->update(['status' => 'processing']);
     }
 
-    public function markCompleted(int $inputTokens, int $outputTokens, string $model, float $processingTime): void
+    public function markCompleted(int $inputTokens, int $outputTokens, string $model, float $processingTime, string $stopReason = 'end_turn'): void
     {
         $this->update([
             'status' => 'completed',
@@ -62,6 +65,7 @@ class ProcessingLog extends Model
             'output_tokens' => $outputTokens,
             'model' => $model,
             'processing_time' => $processingTime,
+            'stop_reason' => $stopReason,
         ]);
     }
 

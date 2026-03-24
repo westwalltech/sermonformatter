@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use NewSong\SermonFormatter\Services\ClaudeResponse;
 
 it('creates from API response', function () {

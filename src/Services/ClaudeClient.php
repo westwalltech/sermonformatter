@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Services;
 
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use NewSong\SermonFormatter\Support\Logger;
 
@@ -39,7 +42,7 @@ class ClaudeClient
         $response = Http::timeout(120)
             ->retry(2, 5000, function ($exception) {
                 // Only retry on server errors or rate limits
-                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                if ($exception instanceof RequestException) {
                     $status = $exception->response?->status();
 
                     return $status === 429 || $status >= 500;

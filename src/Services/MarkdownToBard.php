@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Services;
 
 use League\CommonMark\CommonMarkConverter;
@@ -11,6 +13,10 @@ class MarkdownToBard
 {
     public function convert(string $markdown): array
     {
+        if (empty(trim($markdown))) {
+            return [];
+        }
+
         Logger::debug('Converting markdown to Bard format', [
             'markdown_length' => strlen($markdown),
         ]);

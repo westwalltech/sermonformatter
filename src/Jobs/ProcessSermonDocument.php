@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\File;
 use NewSong\SermonFormatter\Models\ProcessingLog;
@@ -18,7 +21,10 @@ use Statamic\Facades\Entry;
 
 class ProcessSermonDocument implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
     public int $tries;
 
@@ -36,6 +42,15 @@ class ProcessSermonDocument implements ShouldQueue
         $this->retryAfter = config('sermon-formatter.queue.retry_after', 120);
         $this->onQueue(config('sermon-formatter.queue.name', 'default'));
         $this->targetField = $targetField ?? config('sermon-formatter.processing.target_field', 'notes');
+    }
+
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('sermon-formatter-claude-api'))
+                ->releaseAfter(config('sermon-formatter.rate_limit.cooldown_seconds', 5))
+                ->expireAfter($this->retryAfter),
+        ];
     }
 
     public function handle(
@@ -80,6 +95,15 @@ class ProcessSermonDocument implements ShouldQueue
                 'output_tokens' => $response->outputTokens,
             ]);
 
+            // Check for truncated output
+            $isTruncated = $response->stopReason === 'max_tokens';
+            if ($isTruncated) {
+                Logger::warning('Claude response was truncated (hit max_tokens limit)', [
+                    'entry_id' => $this->entryId,
+                    'output_tokens' => $response->outputTokens,
+                ]);
+            }
+
             // Step 3: Convert markdown to Bard content
             $bardContent = $converter->convert($response->content);
 
@@ -89,10 +113,26 @@ class ProcessSermonDocument implements ShouldQueue
                 throw new \RuntimeException("Entry {$this->entryId} not found.");
             }
 
+            // Log if overwriting previously formatted content
+            $existingContent = $entry->get($this->targetField);
+            $sermonSource = $entry->get('sermon_source', []);
+            $previousStatus = $sermonSource['status'] ?? null;
+
+            if (! empty($existingContent) && $previousStatus === 'completed') {
+                Logger::info('Overwriting previously formatted content', [
+                    'entry_id' => $this->entryId,
+                    'previous_nodes' => is_array($existingContent) ? count($existingContent) : 0,
+                ]);
+            }
+
             $entry->set($this->targetField, $bardContent);
             $entry->set('sermon_source', array_merge(
                 $entry->get('sermon_source', []),
-                ['status' => 'completed', 'processed_at' => now()->toIso8601String(), 'error' => null],
+                [
+                    'status' => $isTruncated ? 'completed_truncated' : 'completed',
+                    'processed_at' => now()->toIso8601String(),
+                    'error' => $isTruncated ? 'Output was truncated (hit token limit). Content may be incomplete.' : null,
+                ],
             ));
             $entry->saveQuietly();
 
@@ -108,7 +148,12 @@ class ProcessSermonDocument implements ShouldQueue
                 $response->outputTokens,
                 $response->model,
                 $processingTime,
+                $response->stopReason,
             );
+
+            if ($isTruncated) {
+                $log->update(['error' => 'Output was truncated (hit max_tokens limit). Content may be incomplete.']);
+            }
 
             // Step 6: Clean up temp file
             $this->cleanupFile();
@@ -134,8 +179,6 @@ class ProcessSermonDocument implements ShouldQueue
                 }
             } catch (\Exception $ignore) {
             }
-
-            $this->cleanupFile();
 
             Logger::error('Sermon processing failed', [
                 'entry_id' => $this->entryId,

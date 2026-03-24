@@ -1,9 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Console\Commands;
 
 use Illuminate\Console\Command;
+use NewSong\SermonFormatter\Jobs\ProcessSermonDocument;
 use NewSong\SermonFormatter\Models\ProcessingLog;
+use NewSong\SermonFormatter\Support\FileLocator;
 use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\Entry;
 
@@ -82,8 +86,8 @@ class BulkProcessCommand extends Command
             }
 
             // Check if the temp file still exists
-            $filePath = storage_path('sermon-formatter/uploads/'.$log->file_name);
-            if (! file_exists($filePath)) {
+            $filePath = FileLocator::findUploadedFile($log->file_name);
+            if (! $filePath) {
                 $this->warn("File {$log->file_name} not found for entry {$log->entry_id}, skipping.");
                 $skipped++;
 
@@ -92,7 +96,7 @@ class BulkProcessCommand extends Command
 
             // Re-dispatch the job
             $log->update(['status' => 'pending', 'error' => null]);
-            \NewSong\SermonFormatter\Jobs\ProcessSermonDocument::dispatch(
+            ProcessSermonDocument::dispatch(
                 $log->entry_id,
                 $log->collection,
                 $filePath,

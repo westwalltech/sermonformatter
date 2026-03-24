@@ -1,15 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Tests;
 
 use NewSong\SermonFormatter\ServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Statamic\Providers\BardServiceProvider;
 
 class TestCase extends OrchestraTestCase
 {
     protected function getPackageProviders($app): array
     {
         return [
+            BardServiceProvider::class,
             ServiceProvider::class,
         ];
     }
@@ -25,5 +29,10 @@ class TestCase extends OrchestraTestCase
 
         $app['config']->set('sermon-formatter.anthropic.api_key', 'test-key');
         $app['config']->set('sermon-formatter.anthropic.model', 'claude-sonnet-4-20250514');
+    }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NewSong\SermonFormatter\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
@@ -10,9 +12,9 @@ use Inertia\Inertia;
 use NewSong\SermonFormatter\Jobs\ProcessSermonDocument;
 use NewSong\SermonFormatter\Models\ProcessingLog;
 use NewSong\SermonFormatter\Services\ClaudeClient;
-use NewSong\SermonFormatter\Services\DocumentParser;
 use NewSong\SermonFormatter\Services\FormattingSpecs;
 use NewSong\SermonFormatter\Services\MarkdownToBard;
+use NewSong\SermonFormatter\Support\FileLocator;
 use NewSong\SermonFormatter\Support\Logger;
 use Statamic\Facades\Entry;
 
@@ -46,6 +48,25 @@ class SermonFormatterController extends Controller
         $avgProcessingTime = ProcessingLog::completed()
             ->avg('processing_time') ?? 0;
 
+        // Estimate cost based on model pricing (per million tokens, in USD)
+        $modelPricing = [
+            'claude-sonnet-4-5-20250929' => ['input' => 3.0, 'output' => 15.0],
+            'claude-sonnet-4-20250514' => ['input' => 3.0, 'output' => 15.0],
+            'claude-haiku-4-5-20251001' => ['input' => 0.80, 'output' => 4.0],
+        ];
+
+        $costData = ProcessingLog::completed()
+            ->selectRaw('model, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output')
+            ->groupBy('model')
+            ->get();
+
+        $estimatedCost = 0.0;
+        foreach ($costData as $row) {
+            $pricing = $modelPricing[$row->model] ?? $modelPricing['claude-sonnet-4-5-20250929'];
+            $estimatedCost += ($row->total_input / 1_000_000) * $pricing['input'];
+            $estimatedCost += ($row->total_output / 1_000_000) * $pricing['output'];
+        }
+
         $recentLogs = ProcessingLog::orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
@@ -67,6 +88,7 @@ class SermonFormatterController extends Controller
             'total_pending' => $totalPending,
             'total_tokens' => $totalTokens,
             'avg_processing_time' => round($avgProcessingTime, 1),
+            'estimated_cost_usd' => round($estimatedCost, 4),
             'recent_logs' => $recentLogs,
         ]);
     }
@@ -102,6 +124,7 @@ class SermonFormatterController extends Controller
             'file' => [
                 'required',
                 'file',
+                'mimes:docx,rtf',
                 'max:'.(config('sermon-formatter.processing.max_file_size', 10) * 1024),
             ],
             'entry_id' => 'required|string',
@@ -109,15 +132,6 @@ class SermonFormatterController extends Controller
         ]);
 
         $file = $request->file('file');
-        $extension = strtolower($file->getClientOriginalExtension());
-
-        $allowedExtensions = config('sermon-formatter.processing.allowed_extensions', ['docx', 'rtf']);
-        if (! in_array($extension, $allowedExtensions)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid file type. Allowed: '.implode(', ', $allowedExtensions),
-            ], 422);
-        }
 
         // Verify entry exists
         $entry = Entry::find($request->input('entry_id'));
@@ -126,6 +140,18 @@ class SermonFormatterController extends Controller
                 'success' => false,
                 'message' => 'Entry not found.',
             ], 404);
+        }
+
+        // Check for already-pending or processing jobs for this entry
+        $existingJob = ProcessingLog::where('entry_id', $request->input('entry_id'))
+            ->whereIn('status', ['pending', 'processing'])
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This entry already has a sermon being processed. Please wait for it to complete or check the processing logs.',
+            ], 409);
         }
 
         // Derive collection from entry if not provided
@@ -230,9 +256,6 @@ class SermonFormatterController extends Controller
             ], 404);
         }
 
-        // Check if the file still exists
-        $filePath = storage_path('sermon-formatter/uploads/'.time().'_'.$log->file_name);
-
         // If original file is gone, we need a re-upload
         $entry = Entry::find($entryId);
         if (! $entry) {
@@ -251,7 +274,7 @@ class SermonFormatterController extends Controller
         ]);
 
         // We need the original file - check if it exists
-        $existingFile = $this->findUploadedFile($log->file_name);
+        $existingFile = FileLocator::findUploadedFile($log->file_name);
         if (! $existingFile) {
             $newLog->markFailed('Original file not found. Please re-upload the document.');
 
@@ -350,7 +373,7 @@ class SermonFormatterController extends Controller
                 continue;
             }
 
-            $file = $this->findUploadedFile($log->file_name);
+            $file = FileLocator::findUploadedFile($log->file_name);
             if (! $file) {
                 $skipped++;
 
@@ -416,27 +439,5 @@ class SermonFormatterController extends Controller
             'success' => true,
             'message' => 'Formatting specs saved.',
         ]);
-    }
-
-    protected function findUploadedFile(string $fileName): ?string
-    {
-        $uploadDir = storage_path('sermon-formatter/uploads');
-        if (! File::isDirectory($uploadDir)) {
-            return null;
-        }
-
-        // Look for the file (may have timestamp prefix)
-        $files = File::glob($uploadDir.'/*_'.$fileName);
-        if (! empty($files)) {
-            return end($files); // Return the most recent one
-        }
-
-        // Also check for exact match
-        $exactPath = $uploadDir.'/'.$fileName;
-        if (File::exists($exactPath)) {
-            return $exactPath;
-        }
-
-        return null;
     }
 }

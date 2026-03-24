@@ -5,42 +5,54 @@
 
         <!-- Filters -->
         <div class="flex gap-3 mb-4">
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
                 <Input
                     v-model="filters.search"
                     @update:model-value="debouncedLoad"
                     placeholder="Search by file name or entry ID..."
+                    icon="search"
+                    clearable
                 />
             </div>
-            <Select
-                v-model="filters.status"
-                @update:model-value="loadLogs"
-                :options="statusOptions"
-            />
-            <Select
-                v-model="filters.collection"
-                @update:model-value="loadLogs"
-                :options="collectionOptions"
-            />
+            <div class="w-48 shrink-0">
+                <Select
+                    v-model="filters.status"
+                    @update:model-value="loadLogs"
+                    :options="statusOptions"
+                    placeholder="All Statuses"
+                    clearable
+                />
+            </div>
+            <div class="w-48 shrink-0">
+                <Select
+                    v-model="filters.collection"
+                    @update:model-value="loadLogs"
+                    :options="collectionOptions"
+                    placeholder="All Collections"
+                    clearable
+                />
+            </div>
         </div>
 
         <!-- Logs Table -->
         <Card>
-            <div v-if="loading" class="flex items-center justify-center py-8">
-                <Icon name="loading" class="animate-spin h-6 w-6 text-gray-400" />
+            <div v-if="loading" class="p-4 space-y-3">
+                <Skeleton class="h-8 w-full" />
+                <Skeleton class="h-8 w-full" />
+                <Skeleton class="h-8 w-full" />
+                <Skeleton class="h-8 w-3/4" />
             </div>
 
             <div v-else-if="logs.length" class="p-4">
-                <Table>
+                <Table class="table-fixed w-full">
                     <TableColumns>
-                        <TableColumn>Status</TableColumn>
+                        <TableColumn class="w-24">Status</TableColumn>
                         <TableColumn>File</TableColumn>
-                        <TableColumn>Collection</TableColumn>
-                        <TableColumn>Model</TableColumn>
-                        <TableColumn>Tokens</TableColumn>
-                        <TableColumn>Time</TableColumn>
-                        <TableColumn>Date</TableColumn>
-                        <TableColumn>Error</TableColumn>
+                        <TableColumn class="w-28">Collection</TableColumn>
+                        <TableColumn class="w-24 text-right">Tokens</TableColumn>
+                        <TableColumn class="w-20 text-right">Time</TableColumn>
+                        <TableColumn class="w-40">Date</TableColumn>
+                        <TableColumn class="w-10"></TableColumn>
                     </TableColumns>
                     <TableRows>
                         <TableRow v-for="log in logs" :key="log.id">
@@ -52,81 +64,76 @@
                                 />
                             </TableCell>
                             <TableCell>
-                                <span class="truncate max-w-xs block">{{ log.file_name }}</span>
+                                <span class="truncate block" :title="log.file_name">{{ log.file_name }}</span>
                             </TableCell>
                             <TableCell>{{ log.collection }}</TableCell>
-                            <TableCell>
-                                <span class="text-xs text-gray-500">{{ log.model || '—' }}</span>
-                            </TableCell>
-                            <TableCell>
-                                <span v-if="log.input_tokens || log.output_tokens" class="text-xs">
-                                    {{ (log.input_tokens || 0) + (log.output_tokens || 0) }}
+                            <TableCell class="text-right">
+                                <span v-if="log.input_tokens || log.output_tokens" class="text-xs tabular-nums">
+                                    {{ formatTokens((log.input_tokens || 0) + (log.output_tokens || 0)) }}
                                 </span>
-                                <span v-else>—</span>
+                                <span v-else class="text-gray-400">--</span>
                             </TableCell>
-                            <TableCell>
-                                {{ log.processing_time ? `${log.processing_time}s` : '—' }}
+                            <TableCell class="text-right">
+                                <span v-if="log.processing_time" class="text-xs tabular-nums">
+                                    {{ formatTime(log.processing_time) }}
+                                </span>
+                                <span v-else class="text-gray-400">--</span>
                             </TableCell>
                             <TableCell>
                                 <span class="text-xs text-gray-500">{{ formatDate(log.created_at) }}</span>
                             </TableCell>
-                            <TableCell>
-                                <span
-                                    v-if="log.error"
-                                    class="text-xs text-red-600 dark:text-red-400 truncate max-w-xs block cursor-help"
-                                    :title="log.error"
-                                >
-                                    {{ log.error }}
-                                </span>
-                                <span v-else>—</span>
+                            <TableCell class="text-right">
+                                <!-- statamic-ui-auditor: row details via Dropdown instead of inline error column -->
+                                <Dropdown v-if="log.error || log.model" align="end">
+                                    <DropdownMenu>
+                                        <DropdownLabel v-if="log.model" :text="`Model: ${log.model}`" />
+                                        <DropdownSeparator v-if="log.model && log.error" />
+                                        <DropdownLabel v-if="log.error" :text="log.error" class="text-red-600 dark:text-red-400 max-w-xs whitespace-normal" />
+                                    </DropdownMenu>
+                                </Dropdown>
                             </TableCell>
                         </TableRow>
                     </TableRows>
                 </Table>
 
                 <!-- Pagination -->
-                <div v-if="pagination.last_page > 1" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-dark-600">
-                    <Description>
-                        Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }}
-                    </Description>
-                    <div class="flex gap-2">
-                        <Button
-                            @click="goToPage(pagination.current_page - 1)"
-                            :disabled="pagination.current_page <= 1"
-                            variant="ghost"
-                            size="sm"
-                            text="Previous"
-                        />
-                        <Button
-                            @click="goToPage(pagination.current_page + 1)"
-                            :disabled="pagination.current_page >= pagination.last_page"
-                            variant="ghost"
-                            size="sm"
-                            text="Next"
-                        />
-                    </div>
+                <div v-if="pagination.last_page > 1" class="mt-4 pt-4 border-t border-gray-200 dark:border-dark-600">
+                    <Pagination
+                        :resource-meta="pagination"
+                        :show-per-page-selector="false"
+                        :scroll-to-top="true"
+                        @page-selected="goToPage"
+                    />
                 </div>
             </div>
 
-            <div v-else class="flex flex-col items-center justify-center py-8 text-center">
-                <Icon name="file-content-list" class="w-10 h-10 text-gray-300 dark:text-gray-600" />
-                <Description class="mt-2">No processing logs found</Description>
-            </div>
+            <ul v-else>
+                <EmptyStateItem
+                    icon="file-content-list"
+                    heading="No processing logs found"
+                    description="Logs will appear here after sermon documents are processed."
+                />
+            </ul>
         </Card>
     </div>
 </template>
 
-<script>
+<script setup>
+import { ref, computed, getCurrentInstance } from 'vue';
 import { Head } from '@statamic/cms/inertia';
 import {
     Badge,
-    Button,
     Card,
-    Description,
+    Dropdown,
+    DropdownLabel,
+    DropdownMenu,
+    DropdownSeparator,
+    EmptyStateItem,
     Header,
-    Icon,
     Input,
+    Pagination,
     Select,
+    Skeleton,
     Table,
     TableColumns,
     TableColumn,
@@ -135,124 +142,98 @@ import {
     TableCell,
 } from '@statamic/cms/ui';
 
-export default {
-    components: {
-        Head,
-        Badge,
-        Button,
-        Card,
-        Description,
-        Header,
-        Icon,
-        Input,
-        Select,
-        Table,
-        TableColumns,
-        TableColumn,
-        TableRows,
-        TableRow,
-        TableCell,
-    },
+const instance = getCurrentInstance();
+const $axios = instance?.appContext?.config?.globalProperties?.$axios;
 
-    data() {
-        return {
-            logs: [],
-            loading: true,
-            searchTimeout: null,
-            pagination: {
-                current_page: 1,
-                last_page: 1,
-                from: 0,
-                to: 0,
-                total: 0,
-            },
-            filters: {
-                search: '',
-                status: '',
-                collection: '',
-            },
+const logs = ref([]);
+const loading = ref(true);
+let searchTimeout = null;
+
+const pagination = ref({
+    current_page: 1,
+    last_page: 1,
+    from: 0,
+    to: 0,
+    total: 0,
+});
+
+const filters = ref({
+    search: '',
+    status: null,
+    collection: null,
+});
+
+const statusOptions = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'processing', label: 'Processing' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'failed', label: 'Failed' },
+];
+
+const collectionOptions = [
+    { value: 'messages', label: 'Messages' },
+    { value: 'nss_messages', label: 'NSS Messages' },
+];
+
+async function loadLogs(page = 1) {
+    loading.value = true;
+    try {
+        const params = { page, per_page: 20 };
+        if (filters.value.search) params.search = filters.value.search;
+        if (filters.value.status) params.status = filters.value.status;
+        if (filters.value.collection) params.collection = filters.value.collection;
+
+        const response = await $axios.get('/cp/sermon-formatter/logs/data', { params });
+
+        logs.value = response.data.data;
+        pagination.value = {
+            current_page: response.data.current_page,
+            last_page: response.data.last_page,
+            from: response.data.from || 0,
+            to: response.data.to || 0,
+            total: response.data.total || 0,
         };
-    },
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+    } finally {
+        loading.value = false;
+    }
+}
 
-    computed: {
-        statusOptions() {
-            return [
-                { value: '', label: 'All Statuses' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'processing', label: 'Processing' },
-                { value: 'completed', label: 'Completed' },
-                { value: 'failed', label: 'Failed' },
-            ];
-        },
+function debouncedLoad() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadLogs(), 300);
+}
 
-        collectionOptions() {
-            return [
-                { value: '', label: 'All Collections' },
-                { value: 'messages', label: 'Messages' },
-                { value: 'nss_messages', label: 'NSS Messages' },
-            ];
-        },
-    },
+function goToPage(page) {
+    loadLogs(page);
+}
 
-    mounted() {
-        this.loadLogs();
-    },
+function getStatusColor(status) {
+    return { completed: 'green', failed: 'red', processing: 'blue', pending: 'amber' }[status] || 'gray';
+}
 
-    methods: {
-        async loadLogs(page = 1) {
-            this.loading = true;
-            try {
-                const params = {
-                    page,
-                    per_page: 20,
-                };
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
-                if (this.filters.search) params.search = this.filters.search;
-                if (this.filters.status) params.status = this.filters.status;
-                if (this.filters.collection) params.collection = this.filters.collection;
+// statamic-ui-auditor: round raw float to 1 decimal place
+function formatTime(seconds) {
+    if (typeof seconds !== 'number') {
+        seconds = parseFloat(seconds);
+    }
+    if (isNaN(seconds)) return '--';
+    return `${seconds.toFixed(1)}s`;
+}
 
-                const response = await this.$axios.get('/cp/sermon-formatter/logs/data', { params });
+function formatTokens(count) {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return String(count);
+}
 
-                this.logs = response.data.data;
-                this.pagination = {
-                    current_page: response.data.current_page,
-                    last_page: response.data.last_page,
-                    from: response.data.from || 0,
-                    to: response.data.to || 0,
-                    total: response.data.total || 0,
-                };
-            } catch (error) {
-                console.error('Failed to load logs:', error);
-            } finally {
-                this.loading = false;
-            }
-        },
-
-        debouncedLoad() {
-            clearTimeout(this.searchTimeout);
-            this.searchTimeout = setTimeout(() => {
-                this.loadLogs();
-            }, 300);
-        },
-
-        goToPage(page) {
-            this.loadLogs(page);
-        },
-
-        getStatusColor(status) {
-            return {
-                completed: 'green',
-                failed: 'red',
-                processing: 'blue',
-                pending: 'amber',
-            }[status] || 'gray';
-        },
-
-        formatDate(dateString) {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        },
-    },
-};
+// Load on mount
+loadLogs();
 </script>

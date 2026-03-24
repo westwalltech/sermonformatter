@@ -12,6 +12,7 @@ use Inertia\Inertia;
 use NewSong\SermonFormatter\Jobs\ProcessSermonDocument;
 use NewSong\SermonFormatter\Models\ProcessingLog;
 use NewSong\SermonFormatter\Services\ClaudeClient;
+use NewSong\SermonFormatter\Services\DocumentParser;
 use NewSong\SermonFormatter\Services\FormattingSpecs;
 use NewSong\SermonFormatter\Services\MarkdownToBard;
 use NewSong\SermonFormatter\Support\FileLocator;
@@ -217,6 +218,183 @@ class SermonFormatterController extends Controller
             'log_id' => $log->id,
             'status' => 'pending',
         ]);
+    }
+
+    public function analyze(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => [
+                'required',
+                'file',
+                'mimes:docx,rtf',
+                'max:'.(config('sermon-formatter.processing.max_file_size', 10) * 1024),
+            ],
+        ]);
+
+        $file = $request->file('file');
+
+        // Store file in temp location
+        $uploadDir = storage_path('sermon-formatter/uploads');
+        if (! File::isDirectory($uploadDir)) {
+            File::makeDirectory($uploadDir, 0755, true);
+        }
+
+        $fileName = $file->getClientOriginalName();
+        $storedName = time().'_'.$fileName;
+        $file->move($uploadDir, $storedName);
+        $filePath = $uploadDir.'/'.$storedName;
+
+        try {
+            $parser = app(DocumentParser::class);
+            $rawText = $parser->parse($filePath);
+            $charCount = strlen($rawText);
+            $estimatedTokens = (int) round($charCount / 1.7);
+            $maxCharacters = config('sermon-formatter.processing.max_characters', 50000);
+
+            $isSlidesExport = $charCount > $maxCharacters;
+            $isLargeDocument = $charCount > 20000;
+
+            // Estimate cost based on configured model
+            $model = config('sermon-formatter.anthropic.model');
+            $costPerMillionInput = match (true) {
+                str_contains($model, 'haiku') => 0.80,
+                str_contains($model, 'sonnet') => 3.00,
+                str_contains($model, 'opus') => 15.00,
+                default => 3.00,
+            };
+            $estimatedCost = ($estimatedTokens / 1_000_000) * $costPerMillionInput;
+
+            return response()->json([
+                'success' => true,
+                'characters' => $charCount,
+                'estimated_tokens' => $estimatedTokens,
+                'estimated_cost' => round($estimatedCost, 4),
+                'estimated_cost_display' => '$'.number_format($estimatedCost, 2),
+                'is_slides_export' => $isSlidesExport,
+                'is_large_document' => $isLargeDocument,
+                'exceeds_limit' => $charCount > $maxCharacters,
+                'max_characters' => $maxCharacters,
+                'file_name' => $fileName,
+                'temp_file' => $storedName,
+            ]);
+        } catch (\Exception $e) {
+            // Clean up temp file on parse failure
+            File::delete($filePath);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to parse document: '.$e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function confirm(Request $request): JsonResponse
+    {
+        $request->validate([
+            'entry_id' => 'required|string',
+            'temp_file' => 'required|string',
+            'collection' => 'nullable|string',
+        ]);
+
+        $tempFile = $request->input('temp_file');
+        $uploadDir = storage_path('sermon-formatter/uploads');
+        $filePath = $uploadDir.'/'.$tempFile;
+
+        // Validate temp file exists and is within the uploads directory
+        if (! File::exists($filePath) || ! str_starts_with(realpath($filePath), realpath($uploadDir))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Temporary file not found or invalid. Please re-upload.',
+            ], 404);
+        }
+
+        // Verify entry exists
+        $entry = Entry::find($request->input('entry_id'));
+        if (! $entry) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Entry not found.',
+            ], 404);
+        }
+
+        // Check for already-pending or processing jobs for this entry
+        $existingJob = ProcessingLog::where('entry_id', $request->input('entry_id'))
+            ->whereIn('status', ['pending', 'processing'])
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This entry already has a sermon being processed. Please wait for it to complete or check the processing logs.',
+            ], 409);
+        }
+
+        // Derive collection from entry if not provided
+        $collection = $request->input('collection');
+        if (empty($collection) && method_exists($entry, 'collectionHandle')) {
+            $collection = $entry->collectionHandle();
+        }
+
+        // Extract original file name from stored name (remove timestamp prefix)
+        $fileName = preg_replace('/^\d+_/', '', $tempFile);
+
+        // Create processing log
+        $log = ProcessingLog::create([
+            'entry_id' => $request->input('entry_id'),
+            'collection' => $collection,
+            'file_name' => $fileName,
+            'status' => 'pending',
+        ]);
+
+        $targetField = $request->input('target_field', config('sermon-formatter.processing.target_field', 'notes'));
+
+        // Update entry status
+        $entry->set('sermon_source', [
+            'status' => 'pending',
+            'file_name' => $fileName,
+            'processed_at' => null,
+            'error' => null,
+            'log_id' => $log->id,
+        ]);
+        $entry->saveQuietly();
+
+        Logger::info('Sermon confirmed for processing', [
+            'entry_id' => $request->input('entry_id'),
+            'file' => $fileName,
+            'log_id' => $log->id,
+        ]);
+
+        ProcessSermonDocument::dispatch(
+            $request->input('entry_id'),
+            $collection,
+            $filePath,
+            $fileName,
+            $log->id,
+            $targetField,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'File queued for processing.',
+            'log_id' => $log->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function cleanupTempFile(Request $request): JsonResponse
+    {
+        $request->validate([
+            'temp_file' => 'required|string',
+        ]);
+
+        $uploadDir = storage_path('sermon-formatter/uploads');
+        $filePath = $uploadDir.'/'.$request->input('temp_file');
+
+        if (File::exists($filePath) && str_starts_with(realpath($filePath), realpath($uploadDir))) {
+            File::delete($filePath);
+        }
+
+        return response()->json(['success' => true]);
     }
 
     public function status(string $entryId): JsonResponse

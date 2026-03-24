@@ -113,6 +113,18 @@ class ProcessSermonDocument implements ShouldQueue
                 throw new \RuntimeException("Entry {$this->entryId} not found.");
             }
 
+            // Log if overwriting previously formatted content
+            $existingContent = $entry->get($this->targetField);
+            $sermonSource = $entry->get('sermon_source', []);
+            $previousStatus = $sermonSource['status'] ?? null;
+
+            if (! empty($existingContent) && $previousStatus === 'completed') {
+                Logger::info('Overwriting previously formatted content', [
+                    'entry_id' => $this->entryId,
+                    'previous_nodes' => is_array($existingContent) ? count($existingContent) : 0,
+                ]);
+            }
+
             $entry->set($this->targetField, $bardContent);
             $entry->set('sermon_source', array_merge(
                 $entry->get('sermon_source', []),

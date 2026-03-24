@@ -5,23 +5,33 @@
 
         <!-- Filters -->
         <div class="flex gap-3 mb-4">
-            <div class="flex-1">
+            <div class="flex-1 min-w-0">
                 <Input
                     v-model="filters.search"
                     @update:model-value="debouncedLoad"
                     placeholder="Search by file name or entry ID..."
+                    icon="search"
+                    clearable
                 />
             </div>
-            <Select
-                v-model="filters.status"
-                @update:model-value="loadLogs"
-                :options="statusOptions"
-            />
-            <Select
-                v-model="filters.collection"
-                @update:model-value="loadLogs"
-                :options="collectionOptions"
-            />
+            <div class="w-48 shrink-0">
+                <Select
+                    v-model="filters.status"
+                    @update:model-value="loadLogs"
+                    :options="statusOptions"
+                    placeholder="All Statuses"
+                    clearable
+                />
+            </div>
+            <div class="w-48 shrink-0">
+                <Select
+                    v-model="filters.collection"
+                    @update:model-value="loadLogs"
+                    :options="collectionOptions"
+                    placeholder="All Collections"
+                    clearable
+                />
+            </div>
         </div>
 
         <!-- Logs Table -->
@@ -149,23 +159,21 @@ const pagination = ref({
 
 const filters = ref({
     search: '',
-    status: '',
-    collection: '',
+    status: null,
+    collection: null,
 });
 
-const statusOptions = computed(() => [
-    { value: '', label: 'All Statuses' },
+const statusOptions = [
     { value: 'pending', label: 'Pending' },
     { value: 'processing', label: 'Processing' },
     { value: 'completed', label: 'Completed' },
     { value: 'failed', label: 'Failed' },
-]);
+];
 
-const collectionOptions = computed(() => [
-    { value: '', label: 'All Collections' },
+const collectionOptions = [
     { value: 'messages', label: 'Messages' },
     { value: 'nss_messages', label: 'NSS Messages' },
-]);
+];
 
 async function loadLogs(page = 1) {
     loading.value = true;

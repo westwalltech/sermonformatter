@@ -113,6 +113,7 @@ class ProcessSermonDocument implements ShouldQueue
                 $response->outputTokens,
                 $response->model,
                 $processingTime,
+                $response->stopReason,
             );
 
             // Step 6: Clean up temp file

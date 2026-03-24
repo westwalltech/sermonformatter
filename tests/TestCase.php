@@ -28,4 +28,9 @@ class TestCase extends OrchestraTestCase
         $app['config']->set('sermon-formatter.anthropic.api_key', 'test-key');
         $app['config']->set('sermon-formatter.anthropic.model', 'claude-sonnet-4-20250514');
     }
+
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+    }
 }

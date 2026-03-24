@@ -85,6 +85,15 @@ class ProcessSermonDocument implements ShouldQueue
                 'output_tokens' => $response->outputTokens,
             ]);
 
+            // Check for truncated output
+            $isTruncated = $response->stopReason === 'max_tokens';
+            if ($isTruncated) {
+                Logger::warning('Claude response was truncated (hit max_tokens limit)', [
+                    'entry_id' => $this->entryId,
+                    'output_tokens' => $response->outputTokens,
+                ]);
+            }
+
             // Step 3: Convert markdown to Bard content
             $bardContent = $converter->convert($response->content);
 
@@ -97,7 +106,11 @@ class ProcessSermonDocument implements ShouldQueue
             $entry->set($this->targetField, $bardContent);
             $entry->set('sermon_source', array_merge(
                 $entry->get('sermon_source', []),
-                ['status' => 'completed', 'processed_at' => now()->toIso8601String(), 'error' => null],
+                [
+                    'status' => $isTruncated ? 'completed_truncated' : 'completed',
+                    'processed_at' => now()->toIso8601String(),
+                    'error' => $isTruncated ? 'Output was truncated (hit token limit). Content may be incomplete.' : null,
+                ],
             ));
             $entry->saveQuietly();
 
@@ -115,6 +128,10 @@ class ProcessSermonDocument implements ShouldQueue
                 $processingTime,
                 $response->stopReason,
             );
+
+            if ($isTruncated) {
+                $log->update(['error' => 'Output was truncated (hit max_tokens limit). Content may be incomplete.']);
+            }
 
             // Step 6: Clean up temp file
             $this->cleanupFile();

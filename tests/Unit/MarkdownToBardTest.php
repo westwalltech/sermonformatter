@@ -28,7 +28,7 @@ it('converts heading to bard node', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('heading');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('converts paragraph to bard node', function () {
     $converter = new MarkdownToBard;
@@ -36,7 +36,7 @@ it('converts paragraph to bard node', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('paragraph');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('converts blockquote to bard node', function () {
     $converter = new MarkdownToBard;
@@ -44,7 +44,7 @@ it('converts blockquote to bard node', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('blockquote');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('converts horizontal rule to bard node', function () {
     $converter = new MarkdownToBard;
@@ -52,7 +52,7 @@ it('converts horizontal rule to bard node', function () {
 
     $types = array_column($result, 'type');
     expect($types)->toContain('horizontalRule');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('converts ordered list to bard node', function () {
     $converter = new MarkdownToBard;
@@ -60,7 +60,7 @@ it('converts ordered list to bard node', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('orderedList');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('converts unordered list to bard node', function () {
     $converter = new MarkdownToBard;
@@ -68,14 +68,14 @@ it('converts unordered list to bard node', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('bulletList');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('handles empty markdown', function () {
     $converter = new MarkdownToBard;
     $result = $converter->convert('');
 
     expect($result)->toBeArray();
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
 
 it('preserves bold and italic formatting', function () {
     $converter = new MarkdownToBard;
@@ -83,4 +83,4 @@ it('preserves bold and italic formatting', function () {
 
     expect($result)->toBeArray()
         ->and($result[0]['type'])->toBe('paragraph');
-})->skip(! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');
+})->skip(fn () => ! bardIsBootstrapped(), 'Requires Statamic Bard extensions to be registered');

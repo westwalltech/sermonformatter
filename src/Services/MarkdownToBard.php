@@ -13,6 +13,10 @@ class MarkdownToBard
 {
     public function convert(string $markdown): array
     {
+        if (empty(trim($markdown))) {
+            return [];
+        }
+
         Logger::debug('Converting markdown to Bard format', [
             'markdown_length' => strlen($markdown),
         ]);

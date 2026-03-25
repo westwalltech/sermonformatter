@@ -16,6 +16,7 @@ class DocumentParser
         return match ($extension) {
             'docx' => $this->parseDocx($filePath),
             'rtf' => $this->parseRtf($filePath),
+            'txt' => $this->parseTxt($filePath),
             default => throw new \RuntimeException("Unsupported file type: {$extension}"),
         };
     }
@@ -79,6 +80,20 @@ class DocumentParser
         $text = $this->stripRtf($content);
 
         Logger::info('RTF parsed via fallback', [
+            'file' => basename($filePath),
+            'characters' => strlen($text),
+        ]);
+
+        return $text;
+    }
+
+    protected function parseTxt(string $filePath): string
+    {
+        Logger::debug('Reading plain text file', ['path' => basename($filePath)]);
+
+        $text = trim(file_get_contents($filePath));
+
+        Logger::info('Plain text file read', [
             'file' => basename($filePath),
             'characters' => strlen($text),
         ]);

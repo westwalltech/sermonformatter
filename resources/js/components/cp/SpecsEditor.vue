@@ -67,7 +67,7 @@
                             </div>
                         </div>
 
-                        <Alert v-if="testError" variant="danger">
+                        <Alert v-if="testError" variant="error">
                             {{ testError }}
                         </Alert>
                     </div>

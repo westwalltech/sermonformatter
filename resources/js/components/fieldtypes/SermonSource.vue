@@ -1,36 +1,57 @@
 <template>
     <div class="sermon-source-fieldtype">
-        <!-- Empty State: Drop Zone -->
-        <div
-            v-if="!value.status && !value.file_name && !analyzing"
-            class="border-2 border-dashed rounded-lg p-8 text-center transition-colors"
-            :class="isDragging
-                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-300 dark:border-dark-400 hover:border-gray-400 dark:hover:border-dark-300'"
-            @dragover.prevent="isDragging = true"
-            @dragleave="isDragging = false"
-            @drop.prevent="onFileDrop"
-        >
-            <Icon name="file-content-list" class="w-10 h-10 mx-auto mb-3 text-gray-400 dark:text-gray-500" />
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Drop a <strong>.docx</strong> or <strong>.rtf</strong> file here
-            </p>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
-                or click to browse (max {{ meta.maxFileSize }}MB)
-            </p>
-            <input
-                ref="fileInput"
-                type="file"
-                :accept="acceptTypes"
-                class="hidden"
-                @change="onFileSelect"
+        <!-- Empty State: Upload File + Paste Text -->
+        <div v-if="!value.status && !value.file_name && !analyzing && !analysis" class="space-y-3">
+            <!-- File Upload -->
+            <div
+                class="border-2 border-dashed rounded-lg p-4 text-center transition-colors"
+                :class="isDragging
+                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-300 dark:border-dark-400 hover:border-gray-400 dark:hover:border-dark-300'"
+                @dragover.prevent="isDragging = true"
+                @dragleave="isDragging = false"
+                @drop.prevent="onFileDrop"
+            >
+                <div class="flex items-center justify-center gap-3">
+                    <Icon name="file-content-list" class="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                    <Description>
+                        Drop a <strong>.docx</strong> or <strong>.rtf</strong> file here, or
+                    </Description>
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        :accept="acceptTypes"
+                        class="hidden"
+                        @change="onFileSelect"
+                    />
+                    <Button
+                        @click="$refs.fileInput.click()"
+                        variant="default"
+                        size="sm"
+                        text="Choose File"
+                    />
+                </div>
+            </div>
+
+            <!-- Paste Text -->
+            <Description>Pasting text from your document is recommended for best results.</Description>
+            <Textarea
+                v-model="pastedText"
+                :rows="6"
+                placeholder="Or paste your sermon notes here..."
             />
-            <Button
-                @click="$refs.fileInput.click()"
-                variant="secondary"
-                size="sm"
-                text="Choose File"
-            />
+            <div class="flex items-center gap-3">
+                <Button
+                    @click="analyzePastedText"
+                    variant="primary"
+                    size="sm"
+                    text="Analyze"
+                    :disabled="!pastedText?.trim()"
+                />
+                <Description v-if="pastedText?.trim()">
+                    {{ pastedText.trim().length.toLocaleString() }} characters
+                </Description>
+            </div>
         </div>
 
         <!-- Analyzing State -->
@@ -219,7 +240,7 @@
         </div>
 
         <!-- Error Message -->
-        <Alert v-if="error" variant="danger" class="mt-3">
+        <Alert v-if="error" variant="error" class="mt-3">
             {{ error }}
         </Alert>
     </div>
@@ -234,6 +255,7 @@ import {
     Card,
     Description,
     Icon,
+    Textarea,
 } from '@statamic/cms/ui';
 
 export default {
@@ -246,10 +268,12 @@ export default {
         Card,
         Description,
         Icon,
+        Textarea,
     },
 
     data() {
         return {
+            pastedText: '',
             isDragging: false,
             uploading: false,
             uploadProgress: 0,
@@ -370,6 +394,40 @@ export default {
             }
         },
 
+        async analyzePastedText() {
+            const text = this.pastedText?.trim();
+            if (!text) return;
+
+            if (!this.entryId) {
+                this.error = 'Please save the entry first before processing.';
+                return;
+            }
+
+            this.error = null;
+            this.analysis = null;
+            this.analyzing = true;
+            this.analyzingFileName = 'Pasted text';
+
+            try {
+                const response = await this.$axios.post(this.meta.analyzeTextUrl, { text });
+
+                if (response.data.success) {
+                    this.analysis = response.data;
+                } else {
+                    this.error = response.data.message || 'Analysis failed.';
+                }
+            } catch (err) {
+                const data = err.response?.data;
+                if (data?.errors) {
+                    this.error = Object.values(data.errors).flat().join(' ');
+                } else {
+                    this.error = data?.message || 'Analysis failed. Please try again.';
+                }
+            } finally {
+                this.analyzing = false;
+            }
+        },
+
         async confirmProcessing() {
             if (!this.analysis?.temp_file) return;
 
@@ -394,6 +452,7 @@ export default {
                     });
 
                     this.analysis = null;
+                    this.pastedText = '';
                     this.$toast.success('Document queued for processing.');
                     this.startPolling();
                 } else {
@@ -422,6 +481,7 @@ export default {
                 }
             }
             this.analysis = null;
+            this.pastedText = '';
         },
 
         formatTokens(count) {

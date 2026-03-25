@@ -68,6 +68,7 @@ class SermonSource extends Fieldtype
             'entryId' => $entryId,
             'collection' => $collection,
             'analyzeUrl' => cp_route('sermon-formatter.analyze'),
+            'analyzeTextUrl' => cp_route('sermon-formatter.analyze-text'),
             'confirmUrl' => cp_route('sermon-formatter.confirm'),
             'cleanupUrl' => cp_route('sermon-formatter.cleanup-temp'),
             'uploadUrl' => cp_route('sermon-formatter.upload'),

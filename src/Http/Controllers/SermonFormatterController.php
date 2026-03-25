@@ -288,6 +288,51 @@ class SermonFormatterController extends Controller
         }
     }
 
+    public function analyzeText(Request $request): JsonResponse
+    {
+        $request->validate([
+            'text' => 'required|string|min:10',
+        ]);
+
+        $rawText = trim($request->input('text'));
+        $charCount = strlen($rawText);
+
+        // Store as temp .txt file so the confirm/process flow works unchanged
+        $uploadDir = storage_path('sermon-formatter/uploads');
+        if (! File::isDirectory($uploadDir)) {
+            File::makeDirectory($uploadDir, 0755, true);
+        }
+
+        $storedName = time().'_pasted-text.txt';
+        File::put($uploadDir.'/'.$storedName, $rawText);
+
+        $estimatedTokens = (int) round($charCount / 1.7);
+        $maxCharacters = config('sermon-formatter.processing.max_characters', 50000);
+
+        $model = config('sermon-formatter.anthropic.model');
+        $costPerMillionInput = match (true) {
+            str_contains($model, 'haiku') => 0.80,
+            str_contains($model, 'sonnet') => 3.00,
+            str_contains($model, 'opus') => 15.00,
+            default => 3.00,
+        };
+        $estimatedCost = ($estimatedTokens / 1_000_000) * $costPerMillionInput;
+
+        return response()->json([
+            'success' => true,
+            'characters' => $charCount,
+            'estimated_tokens' => $estimatedTokens,
+            'estimated_cost' => round($estimatedCost, 4),
+            'estimated_cost_display' => '$'.number_format($estimatedCost, 2),
+            'is_slides_export' => false,
+            'is_large_document' => $charCount > 20000,
+            'exceeds_limit' => $charCount > $maxCharacters,
+            'max_characters' => $maxCharacters,
+            'file_name' => 'Pasted text',
+            'temp_file' => $storedName,
+        ]);
+    }
+
     public function confirm(Request $request): JsonResponse
     {
         $request->validate([

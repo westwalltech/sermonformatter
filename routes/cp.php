@@ -16,6 +16,7 @@ Route::prefix('sermon-formatter')->name('sermon-formatter.')->group(function () 
     // Routes that require 'process sermons' permission
     Route::middleware('can:process sermons')->group(function () {
         Route::post('/analyze', [SermonFormatterController::class, 'analyze'])->name('analyze');
+        Route::post('/analyze-text', [SermonFormatterController::class, 'analyzeText'])->name('analyze-text');
         Route::post('/confirm', [SermonFormatterController::class, 'confirm'])->name('confirm');
         Route::post('/cleanup-temp', [SermonFormatterController::class, 'cleanupTempFile'])->name('cleanup-temp');
         Route::post('/upload', [SermonFormatterController::class, 'upload'])->name('upload');
